@@ -1,6 +1,6 @@
 --[[lit-meta
 name = "slact/redis-callback-client"
-version = "0.0.4"
+version = "0.0.5"
 description = "A full-featured callback-based Redis client for Luvit"
 tags = {"redis"}
 license = "MIT"
@@ -89,7 +89,11 @@ return function(url)
     local src
     scripts[name]=sha1(script)
     self:send("script", "load", script, function(err, data)
-      failHard(err, data)
+      if callback then
+        callback(err, data)
+      else
+        failHard(err, data)
+      end
       assert(scripts[name] == data)
     end)
   end
