@@ -1,6 +1,6 @@
 --[[lit-meta
 name = "slact/redis-callback-client"
-version = "0.0.1"
+version = "0.0.2"
 description = "A full-featured callback-based Redis client for Luvit"
 tags = {"redis"}
 license = "MIT"
@@ -50,9 +50,10 @@ return function(url)
       else
         table.insert(callbacks, false)
       end
-      if arg[1] =="multi" then
+      local cmd = arg[1]:lower()
+      if cmd == "multi" then
         socket:cork()
-      elseif arg[1]=="exec" then
+      elseif cmd == "exec" or cmd == "discard" then
         socket:uncork()
       end
       socket:write(redisCodec.encode(arg))
