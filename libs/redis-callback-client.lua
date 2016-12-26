@@ -1,6 +1,6 @@
 --[[lit-meta
 name = "slact/redis-callback-client"
-version = "0.0.3"
+version = "0.0.4"
 description = "A full-featured callback-based Redis client for Luvit"
 tags = {"redis"}
 license = "MIT"

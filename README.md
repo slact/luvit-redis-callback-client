@@ -1,6 +1,6 @@
-# redis-luvit
+# redis-callback-client
 
-A [Redis][] protocol codec for [Luvit][]
+A callback-oriented [Redis][] client for [Luvit][]. Supports subscribing, multi/exec buffering, and named lua scripts.
 
 ## Installing
 
