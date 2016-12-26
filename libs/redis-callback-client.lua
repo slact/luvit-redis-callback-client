@@ -1,13 +1,14 @@
 --[[lit-meta
 name = "slact/redis-callback-client"
-version = "0.0.2"
+version = "0.0.3"
 description = "A full-featured callback-based Redis client for Luvit"
 tags = {"redis"}
 license = "MIT"
 author = { name = "slact" }
 homepage = "https://github.com/slact/luvit-redis-callback-client"
 dependencies = {
-  "creationix/redis-codec@1.0.2",
+  "creationix/redis-codec",
+  "creationix/sha1",
 }
 ]]
 
@@ -15,6 +16,7 @@ local redisCodec = require 'redis-codec'
 local sha1 = require "sha1"
 local regex = require "rex"
 local net = require 'net'
+local Emitter = require("core").Emitter
 
 local parseUrl = function(url)
   local m = {regex.match(url, "(redis://)?(:([^?]+)@)?([\\w.-]+)(:(\\d+))?/?(\\d+)?")}
@@ -31,8 +33,6 @@ return function(url)
   local callbacks = {}
   local scripts = {}
   
-  
-  
   local socket
   
   local failHard=function(err, ok)
@@ -41,89 +41,95 @@ return function(url)
   
   local connect_params=parseUrl(url)
   
-  local self = {
-    send = function(self, ...)
-      local arg = {...}
-      if type(arg[#arg]) == "function" then
-        --add callback
-        table.insert(callbacks, table.remove(arg, #arg))
-      else
-        table.insert(callbacks, false)
-      end
-      local cmd = arg[1]:lower()
-      if cmd == "multi" then
-        socket:cork()
-      elseif cmd == "exec" or cmd == "discard" then
-        socket:uncork()
-      end
-      socket:write(redisCodec.encode(arg))
-      
-      return self
-    end,
-    
-    subscribe = function(self, channel, callback)
-      self:send("subscribe", channel, function(err, d)
-        p("subscribe", channel, err, d)
-        if d then
-          pubsub[channel]=callback
-        else
-          callback(err, nil)
-        end
-      end)
-      return self
-    end,
-    
-    unsubscribe = function(self, channel)
-      self:send("unsubscribe", channel, function(err, d)
-        if d then
-          pubsub[channel]=nil
-        end
-      end)
-    end,
-    
-    disconnect = function(self)
-      socket:shutdown()
-    end,
-    
-    loadScript = function(self, name, script, callback)
-      local src
-      scripts[name]=sha1(script)
-      self:send("script", "load", script, function(err, data)
-        failHard(err, data)
-        assert(scripts[name] == data)
-      end)
-    end,
-    
-    runScript = function(self, name, keys, args, callback)
-      if scripts[name] == false then
-        error("script hasn't loaded yet")
-      elseif scripts[name] then
-        if callback then
-          self:send("evalsha", scripts[name], #keys, unpack(keys), unpack(args), callback)
-        else
-          self:send("evalsha", scripts[name], #keys, unpack(keys), unpack(args))
-        end
-      else
-        error("Unknown Redis script " .. tostring(name))
-      end
+  local Redis = Emitter:extend()
+  function Redis:send(...)
+    local arg = {...}
+    if type(arg[#arg]) == "function" then
+      --add callback
+      table.insert(callbacks, table.remove(arg, #arg))
+    else
+      table.insert(callbacks, false)
     end
-  }
+    local cmd = arg[1]:lower()
+    if cmd == "multi" then
+      socket:cork()
+    elseif cmd == "exec" or cmd == "discard" then
+      socket:uncork()
+    end
+    socket:write(redisCodec.encode(arg))
+    
+    return self
+  end
+    
+  function Redis:subscribe(channel, callback)
+    self:send("subscribe", channel, function(err, d)
+      --p("subscribe", channel, err, d)
+      if d then
+        pubsub[channel]=callback
+      else
+        callback(err, nil)
+      end
+    end)
+    return self
+  end
+    
+  function Redis:unsubscribe(channel)
+    self:send("unsubscribe", channel, function(err, d)
+      if d then
+        pubsub[channel]=nil
+      end
+    end)
+  end
+    
+  function Redis:disconnect()
+    socket:shutdown()
+  end
+    
+  function Redis:loadScript(name, script, callback)
+    local src
+    scripts[name]=sha1(script)
+    self:send("script", "load", script, function(err, data)
+      failHard(err, data)
+      assert(scripts[name] == data)
+    end)
+  end
+    
+  function Redis:runScript(name, keys, args, callback)
+    if scripts[name] == false then
+      error("script hasn't loaded yet")
+    elseif scripts[name] then
+      if callback then
+        self:send("evalsha", scripts[name], #keys, unpack(keys), unpack(args), callback)
+      else
+        self:send("evalsha", scripts[name], #keys, unpack(keys), unpack(args))
+      end
+    else
+      error("Unknown Redis script " .. tostring(name))
+    end
+  end
   
-  p(connect_params)
+  
+  local self = Redis:new()
   
   socket = net.connect(connect_params.port, connect_params.host)
   socket:cork()
   
   if connect_params.password then
-    self:send("auth", connect_params.password, failHard)
+    self:send("auth", connect_params.password, function(err, d)
+    failHard(err, d)
+    if not connect_params.db then self:emit("connect", err, d) end
+    end)
   end
   
   if connect_params.db then
-    self:send("select", connect_params.db, failHard)
+      self:send("select", connect_params.db, function(err, d)
+      failHard(err, d)
+      self:emit("connect", err, d)
+    end)
   end
-    
+  
   socket:on("connect", function(err, d)
-    p("connected")
+    --p("connected")
     socket:uncork()
     if err then 
       if err == "ECONNREFUSED" then
@@ -132,10 +138,13 @@ return function(url)
         error(err)
       end
     end
+    if not (connect_params.password or connect_params.db) then
+      self:emit("connect", err, d)
+    end
   end)
   
   socket:on("disconnect", function(err, d)
-    p("gone")
+    self:emit("disconnect", err, d)
   end)
   
   socket:on('data', function(data)
