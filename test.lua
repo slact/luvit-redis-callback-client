@@ -29,6 +29,13 @@ rds:runScript("name", {}, {1,2,4}, function(err, ok)
   p(ok)
 end)
 
+rds:send("hmset", "fooh", {hello="hi", what="huh", is=11, this=13}, function(err, ok)
+  p("hmset", err, ok)
+end)
+rds:send("hgetall", "fooh", function(err, ok)
+  p("hgetall", err, ok)
+end)
+
 rds:subscribe("foo", function(msg)
   p("got message", msg)
   if msg =="FIN" then
