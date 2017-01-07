@@ -1,6 +1,6 @@
 --[[lit-meta
 name = "slact/redis-callback-client"
-version = "0.0.10"
+version = "0.0.11"
 description = "A full-featured callback-based Redis client for Luvit"
 tags = {"redis"}
 license = "MIT"
@@ -61,11 +61,11 @@ return function(url)
           if not err and type(data)=="table" and #data == #mCb then
             for i, d in ipairs(data) do
               if type(d)=="table" and d.error then
-                mCb[1].cb(d.error, nil)
+                mCb[i].cb(d.error, nil)
               elseif d == false then
-                mCb[1].cb(nil, nil)
+                mCb[i].cb(nil, nil)
               else
-                mCb[1].cb(nil, d)
+                mCb[i].cb(nil, d)
               end
             end
           end
@@ -90,7 +90,7 @@ return function(url)
         table.insert(rearg, v)
       end
       arg = rearg
-    elseif (callback or multi) and cmd == "hgetall" then
+    elseif callback and cmd == "hgetall" then
       local originalCallback = callback
       callback = function(err, data)
         if not err and data then
