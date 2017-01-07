@@ -10,7 +10,7 @@ end)
 rds:on("disconnect", function()
   p("disconnected...")
 end)
-
+--[[
 rds:send("get", "fooo", function(err, d)
   p("hmmm", d)
 end)
@@ -35,7 +35,29 @@ end)
 rds:send("hgetall", "fooh", function(err, ok)
   p("hgetall", err, ok)
 end)
+]]
+function cb(str)
+  return function(err, ok)
+    p(str, err, ok)
+  end
+end
 
+
+
+rds:send("hmget", "fooh", "banana", "11", "what", cb("okay"))
+
+
+rds:send("multi")
+  --:send("hgetall", "fooh", cb("hgetall fooh"))
+  :send("get", "fooo", cb("getfooo"))  
+  :send("get", "foo1", cb("getfoo1"))  
+  --:send("hgetall", "fooh", cb("hgetall fooh, again"))
+:send("exec", function(err, data)
+  p("ooooooooookay", err, data)
+end)
+
+
+--[[
 rds:subscribe("foo", function(msg)
   p("got message", msg)
   if msg =="FIN" then
@@ -43,3 +65,4 @@ rds:subscribe("foo", function(msg)
     rds:disconnect()
   end
 end)
+]]
