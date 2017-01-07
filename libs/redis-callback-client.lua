@@ -1,6 +1,6 @@
 --[[lit-meta
 name = "slact/redis-callback-client"
-version = "0.0.9"
+version = "0.0.10"
 description = "A full-featured callback-based Redis client for Luvit"
 tags = {"redis"}
 license = "MIT"
@@ -90,7 +90,7 @@ return function(url)
         table.insert(rearg, v)
       end
       arg = rearg
-    elseif callback or multi and cmd == "hgetall" then
+    elseif (callback or multi) and cmd == "hgetall" then
       local originalCallback = callback
       callback = function(err, data)
         if not err and data then
